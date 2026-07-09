@@ -1,0 +1,8 @@
+google-genai
+mcp
+click
+rich
+python-dotenv
+httpx
+requests
+pandas
