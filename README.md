@@ -55,9 +55,9 @@ python candela.py configure
 | Gemini API Key | `AIza...` |
 | Gemini Model | `gemini-3.1-flash-lite` |
 | Configure LANforge MCP? | `y` |
-| Path to `server.py` | `<project_dir>/mcp/server.py` (Default) |
-| Path to `lanforge_mcp_dataset.json` | `<project_dir>/mcp/lanforge_mcp_dataset.json` (Default) |
-| Path to `lanforge-scripts` dir | `<project_dir>/mcp/lanforge-scripts` (Default) |
+| Path to `server.py` | `<project_dir>/lanforge_lanforge_mcp/server.py` (Default) |
+| Path to `lanforge_mcp_dataset.json` | `<project_dir>/lanforge_lanforge_mcp/lanforge_mcp_dataset.json` (Default) |
+| Path to `lanforge-scripts` dir | `<project_dir>/lanforge_lanforge_mcp/lanforge-scripts` (Default) |
 | LANforge Manager URL | `http://192.168.215.183:8080` |
 
 Config is saved to `~/.candela/config.json` (your home directory).
@@ -84,7 +84,7 @@ python candela.py chat --mode remote --ssh-host 192.168.215.183 --ssh-user root
 > - SSH key-based auth set up to the LANforge machine (no password prompts).
 > - LANforge scripts (`/home/lanforge/lanforge-scripts`) must exist on the remote LANforge system.
 > - Python 3.9+ installed on the remote machine.
-> - No manual path translation is needed: the client automatically maps your local project's `mcp/` folder path to the corresponding remote path on the LANforge host (e.g., `/home/lanforge/Desktop/sunil/candela_cli/lanforge`).
+> - No manual path translation is needed: the client automatically maps your local project's `lanforge_mcp/` folder path to the corresponding remote path on the LANforge host (e.g., `/home/lanforge/Desktop/sunil/candela_cli/lanforge`).
 
 ### Scenario B — CLI + MCP server both on the same Linux machine (Local Mode)
 
@@ -101,8 +101,8 @@ Set these before running — no interactive prompts needed:
 
 ```bash
 export GEMINI_API_KEY=AIza...
-export LANFORGE_SERVER_PY=/path/to/candelaAI/mcp/server.py
-export LANFORGE_DATASET=/path/to/candelaAI/mcp/lanforge_mcp_dataset.json
+export LANFORGE_SERVER_PY=/path/to/candelaAI/lanforge_lanforge_mcp/server.py
+export LANFORGE_DATASET=/path/to/candelaAI/lanforge_lanforge_mcp/lanforge_mcp_dataset.json
 export LANFORGE_SCRIPTS=/path/to/lanforge-scripts
 export LANFORGE_BASE_URL=http://192.168.215.183:8080
 
@@ -124,9 +124,9 @@ Located at `~/.candela/config.json`. You can edit it directly:
     "lanforge": {
       "command": "python",
       "args": [
-        "D:/Projects/candelaAI/mcp/server.py",
-        "--dataset", "D:/Projects/candelaAI/mcp/lanforge_mcp_dataset.json",
-        "--scripts", "D:/Projects/candelaAI/mcp/lanforge-scripts"
+        "D:/Projects/candelaAI/lanforge_lanforge_mcp/server.py",
+        "--dataset", "D:/Projects/candelaAI/lanforge_lanforge_mcp/lanforge_mcp_dataset.json",
+        "--scripts", "D:/Projects/candelaAI/lanforge_lanforge_mcp/lanforge-scripts"
       ],
       "env": {
         "LANFORGE_BASE_URL": "http://192.168.215.183:8080",
@@ -157,7 +157,7 @@ ssh root@192.168.215.183 echo ok
 
 The entire `candelaAI` project directory is self-contained. Copy it to any machine:
 - `candela.py`, `client.py`, `mcp_client.py`, `config.py` (CLI client files)
-- `mcp/server.py`, `mcp/lanforge_mcp_dataset.json`, `mcp/lanforge_scripts_index.json` (MCP server files)
+- `lanforge_mcp/server.py`, `lanforge_mcp/lanforge_mcp_dataset.json`, `lanforge_mcp/lanforge_scripts_index.json` (MCP server files)
 - `requirements.txt` (dependencies)
 
 The remote LANforge machine only needs the automation scripts repository folder (`/home/lanforge/lanforge-scripts`) which is automatically invoked via SSH during remote execution.

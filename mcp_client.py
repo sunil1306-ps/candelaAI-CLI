@@ -42,7 +42,7 @@ class McpManager:
         
         if self.mode == "remote" and self.ssh_host:
             # Dynamically map the project's mcp folder path to the remote path
-            local_mcp_dir = str(Path(__file__).parent / "mcp").replace("\\", "/")
+            local_mcp_dir = str(Path(__file__).parent / "lanforge_mcp").replace("\\", "/")
             remote_paths = config.get("remote_paths", {
                 local_mcp_dir + "/lanforge-scripts": "/home/lanforge/lanforge-scripts",
                 local_mcp_dir: "/home/lanforge/Desktop/sunil/candela_cli/lanforge",

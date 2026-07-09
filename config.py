@@ -6,9 +6,9 @@ CONFIG_DIR = Path(os.path.expanduser("~/.candela"))
 CONFIG_FILE = CONFIG_DIR / "config.json"
 
 PROJECT_DIR = Path(__file__).parent.resolve()
-server_py_default = str((PROJECT_DIR / "mcp" / "server.py").as_posix())
-dataset_default = str((PROJECT_DIR / "mcp" / "lanforge_mcp_dataset.json").as_posix())
-scripts_default = str((PROJECT_DIR / "mcp" / "lanforge-scripts").as_posix())
+server_py_default = str((PROJECT_DIR / "lanforge_mcp" / "server.py").as_posix())
+dataset_default = str((PROJECT_DIR / "lanforge_mcp" / "lanforge_mcp_dataset.json").as_posix())
+scripts_default = str((PROJECT_DIR / "lanforge_mcp" / "lanforge-scripts").as_posix())
 
 DEFAULT_CONFIG = {
     "provider": "gemini",

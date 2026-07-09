@@ -5,6 +5,19 @@ from urllib.parse import urlparse
 from google import genai
 from google.genai import types
 from mcp_client import McpManager
+class CandelaSession:
+    def __init__(self, provider, session_obj):
+        self.provider = provider
+        self.session_obj = session_obj  # Gemini Chat or OpenAI message list
+
+FALLBACK_MODELS = [
+    "gemini-3.1-flash-lite",
+    "gemini-2.5-flash-lite",
+    "gemini-3-flash",
+    "gemini-2.5-flash",
+    "gemma-4.31b-it",
+    "gemma-4-26b-a4b-it"
+]
 
 class CandelaClient:
     def __init__(self, config):
@@ -28,16 +41,17 @@ class CandelaClient:
                 import os
                 api_key = self.gemini_api_key or os.environ.get("GEMINI_API_KEY")
                 self.gemini_client = genai.Client(api_key=api_key)
-            return self.gemini_client.chats.create(model=self.gemini_model)
+            session_obj = self.gemini_client.chats.create(model=self.gemini_model)
         else:
             # For OpenAI, session is a list of messages
-            return []
+            session_obj = []
+        return CandelaSession(self.provider, session_obj)
 
     async def send_message(self, session, message_text, mcp_manager: McpManager, console):
         if self.provider == "gemini":
             return await self._send_gemini(session, message_text, mcp_manager, console)
         else:
-            return await self._send_openai(session, message_text, mcp_manager, console)
+            return await self._send_openai(session.session_obj, message_text, mcp_manager, console)
 
     def _build_system_prompt(self, mcp_manager: McpManager) -> str:
         # Resolve the LANforge manager IP from MCP config
@@ -79,7 +93,7 @@ class CandelaClient:
         )
 
 
-    async def _send_gemini(self, chat_session, message_text, mcp_manager: McpManager, console):
+    async def _send_gemini(self, session, message_text, mcp_manager: McpManager, console):
         # 1. Prepare tools
         gemini_tools = mcp_manager.get_tools_schemas_for_gemini() if mcp_manager else []
         
@@ -90,15 +104,38 @@ class CandelaClient:
         config_args["system_instruction"] = self._build_system_prompt(mcp_manager)
         config = types.GenerateContentConfig(**config_args)
         
-        # Send message to Gemini
-        # Run in executor because google-genai is synchronous for standard generate/chat
-        # Let's import threadpool or run in executor to keep it async friendly
         import asyncio
         loop = asyncio.get_event_loop()
         
+        models_to_try = [self.gemini_model] + [m for m in FALLBACK_MODELS if m != self.gemini_model]
+        current_model_idx = 0
+        chat_session = session.session_obj
+        
+        def run_with_fallback(send_payload):
+            nonlocal chat_session, current_model_idx
+            while True:
+                try:
+                    return chat_session.send_message(send_payload, config=config)
+                except Exception as e:
+                    current_model_idx += 1
+                    if current_model_idx >= len(models_to_try):
+                        raise e
+                    
+                    next_model = models_to_try[current_model_idx]
+                    console.print(f"[bold yellow]\n[Fallback] Model call failed with {models_to_try[current_model_idx-1]}. Trying fallback model: {next_model}...[/bold yellow]")
+                    
+                    try:
+                        history = chat_session.get_history()
+                    except Exception:
+                        history = []
+                    
+                    chat_session = self.gemini_client.chats.create(model=next_model, history=history)
+                    session.session_obj = chat_session
+        
+        # Send message to Gemini
         response = await loop.run_in_executor(
             None,
-            lambda: chat_session.send_message(message_text, config=config)
+            lambda: run_with_fallback(message_text)
         )
         
         while response.function_calls:
@@ -135,7 +172,7 @@ class CandelaClient:
             # Send all responses back in one turn
             response = await loop.run_in_executor(
                 None,
-                lambda: chat_session.send_message(parts, config=config)
+                lambda: run_with_fallback(parts)
             )
         
         return response.text

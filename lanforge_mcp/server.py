@@ -885,7 +885,13 @@ class LanforgeMcpServer:
 
         suffix = full_path.suffix.lower()
         if suffix == ".py":
-            cmd = [sys.executable, str(full_path)]
+            py_exe = os.getenv("LANFORGE_PYTHON_EXECUTABLE")
+            if not py_exe:
+                if sys.prefix != sys.base_prefix:
+                    py_exe = "python" if sys.platform == "win32" else "python3"
+                else:
+                    py_exe = sys.executable
+            cmd = [py_exe, str(full_path)]
         elif suffix == ".pl":
             cmd = ["perl", str(full_path)]
         elif suffix in (".sh", ".bash"):
