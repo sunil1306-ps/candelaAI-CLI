@@ -125,7 +125,15 @@ async def chat_async(mode=None, ssh_host=None, ssh_user="root"):
         ssh_host = click.prompt("SSH Host (LANforge Manager IP)", default="192.168.215.183")
         ssh_user = click.prompt("SSH User", default="root")
 
-    console.print(Panel(f"[bold magenta]** CandelaAI Agentic CLI ({mode.upper()} mode) **[/bold magenta]\n[dim]Initializing chat session with tools...[/dim]", expand=False))
+    banner = r"""
+  ____                 _      _             _     ___    ____ _     ___ 
+ / ___|__ _ _ __   __| | ___| | __ _       / \   |_ _|  / ___| |   |_ _|
+| |   / _` | '_ \ / _` |/ _ \ |/ _` |     / _ \   | |  | |   | |    | | 
+| |__| (_| | | | | (_| |  __/ | (_| |    / ___ \  | |  | |___| |___ | | 
+ \____\__,_|_| |_|\__,_|\___|_|\__,_|   /_/   \_\___|  \____|_____|___|
+"""
+    console.print(banner, style="bold magenta")
+    console.print(Panel(f"[bold cyan]Agentic LANforge Test Automation CLI ({mode.upper()} mode)[/bold cyan]\n[dim]Initializing chat session with tools...[/dim]", expand=False))
     
     # Initialize MCP Manager
     mcp_servers = config.get("mcp_servers", {})
