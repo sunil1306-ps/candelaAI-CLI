@@ -153,3 +153,5 @@ desktop.ini
 # Local configuration overrides
 .candela/
 config.json.local
+
+project_documentation.md

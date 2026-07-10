@@ -5,10 +5,21 @@ from urllib.parse import urlparse
 from google import genai
 from google.genai import types
 from mcp_client import McpManager
+from rich.panel import Panel
+from rich.live import Live
+class CurrentTurn:
+    def __init__(self):
+        self.user_question = ""
+        self.tool_calls = []  # List of dict: {"name": ..., "args": ..., "output": ...}
+        self.assistant_response = ""
+        self.is_full = False
+
 class CandelaSession:
     def __init__(self, provider, session_obj):
         self.provider = provider
         self.session_obj = session_obj  # Gemini Chat or OpenAI message list
+        self.tool_history = []  # List of tuples (tool_name, full_output)
+        self.current_turn = CurrentTurn()
 
 FALLBACK_MODELS = [
     "gemini-3.1-flash-lite",
@@ -18,6 +29,26 @@ FALLBACK_MODELS = [
     "gemma-4.31b-it",
     "gemma-4-26b-a4b-it"
 ]
+
+def read_char():
+    import sys
+    if sys.platform == "win32":
+        import msvcrt
+        ch = msvcrt.getch()
+        if ch in (b'\x00', b'\xe0'):
+            msvcrt.getch()
+            return None
+        return ch
+    else:
+        import tty, termios
+        fd = sys.stdin.fileno()
+        old_settings = termios.tcgetattr(fd)
+        try:
+            tty.setraw(fd)
+            ch = sys.stdin.read(1)
+        finally:
+            termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
+        return ch.encode('utf-8')
 
 class CandelaClient:
     def __init__(self, config):
@@ -51,7 +82,7 @@ class CandelaClient:
         if self.provider == "gemini":
             return await self._send_gemini(session, message_text, mcp_manager, console)
         else:
-            return await self._send_openai(session.session_obj, message_text, mcp_manager, console)
+            return await self._send_openai(session, message_text, mcp_manager, console)
 
     def _build_system_prompt(self, mcp_manager: McpManager) -> str:
         # Resolve the LANforge manager IP from MCP config
@@ -145,7 +176,7 @@ class CandelaClient:
                 args = function_call.args
                 args_dict = dict(args) if args else {}
                 
-                console.print(f"[bold cyan][AI Tool Call][/bold cyan] {name}({args_dict})")
+                tool_call_details = f"[bold cyan]Tool Name:[/bold cyan] {name}\n[bold cyan]Arguments:[/bold cyan] {json.dumps(args_dict, indent=2)}"
                 
                 try:
                     tool_result = await mcp_manager.call_tool(name, args_dict)
@@ -159,9 +190,19 @@ class CandelaClient:
                             result_text += str(content_item)
                 except Exception as e:
                     result_text = f"Error executing tool: {e}"
-                    console.print(f"[bold red][Tool Error][/bold red] {e}")
                 
-                console.print(f"[bold green][Tool Output][/bold green] {result_text[:500]}..." if len(result_text) > 500 else f"[bold green][Tool Output][/bold green] {result_text}")
+                # Record to tool history
+                session.tool_history.append((name, result_text))
+                session.current_turn.tool_calls.append({"name": name, "args": args_dict, "output": result_text})
+                
+                # Truncate output representation
+                is_truncated = len(result_text) > 300
+                display_output = result_text[:300]
+                if is_truncated:
+                    display_output += "\n\n[dim]... [Output truncated. Press Ctrl+O in prompt to toggle full logs] [/dim]"
+                
+                box_content = f"{tool_call_details}\n\n[bold green]Output:[/bold green]\n{display_output}"
+                console.print(Panel(box_content, title="MCP Tool Execution", border_style="cyan"))
                 
                 part = types.Part.from_function_response(
                     name=name,
@@ -177,7 +218,8 @@ class CandelaClient:
         
         return response.text
  
-    async def _send_openai(self, messages, message_text, mcp_manager: McpManager, console):
+    async def _send_openai(self, session, message_text, mcp_manager: McpManager, console):
+        messages = session.session_obj
         # 1. Append system message if not present
         if not any(msg.get("role") == "system" for msg in messages):
             messages.append({"role": "system", "content": self._build_system_prompt(mcp_manager)})
@@ -250,7 +292,7 @@ class CandelaClient:
                     except Exception:
                         args = {}
                         
-                    console.print(f"[bold cyan][AI Tool Call][/bold cyan] {name}({args})")
+                    tool_call_details = f"[bold cyan]Tool Name:[/bold cyan] {name}\n[bold cyan]Arguments:[/bold cyan] {json.dumps(args, indent=2)}"
                     
                     try:
                         tool_result = await mcp_manager.call_tool(name, args)
@@ -264,9 +306,19 @@ class CandelaClient:
                                 result_text += str(content_item)
                     except Exception as e:
                         result_text = f"Error executing tool: {e}"
-                        console.print(f"[bold red][Tool Error][/bold red] {e}")
-                        
-                    console.print(f"[bold green][Tool Output][/bold green] {result_text[:500]}..." if len(result_text) > 500 else f"[bold green][Tool Output][/bold green] {result_text}")
+                    
+                    # Record to tool history
+                    session.tool_history.append((name, result_text))
+                    session.current_turn.tool_calls.append({"name": name, "args": args, "output": result_text})
+                    
+                    # Truncate output representation
+                    is_truncated = len(result_text) > 300
+                    display_output = result_text[:300]
+                    if is_truncated:
+                        display_output += "\n\n[dim]... [Output truncated. Press Ctrl+O in prompt to toggle full logs] [/dim]"
+                    
+                    box_content = f"{tool_call_details}\n\n[bold green]Output:[/bold green]\n{display_output}"
+                    console.print(Panel(box_content, title="MCP Tool Execution", border_style="cyan"))
                     
                     # Append tool completion response to history
                     messages.append({

@@ -102,6 +102,147 @@ async def wait_for_esc(cancel_event: asyncio.Event):
         # Non-Windows fallback
         pass
 
+def render_turn_content(console, current_turn):
+    import json
+    from rich.panel import Panel
+    from rich.markdown import Markdown
+    
+    with console.capture() as capture:
+        if not current_turn or not current_turn.user_question:
+            return ""
+            
+        # 1. Print user question with horizontal lines
+        console.print("─" * console.width, style="dim blue")
+        console.print(f"User (Press Ctrl+O for logs): {current_turn.user_question.strip()}")
+        console.print("─" * console.width, style="dim blue")
+        
+        # 2. Print tool calls
+        for tool in current_turn.tool_calls:
+            name = tool["name"]
+            args = tool["args"]
+            output = tool["output"]
+            
+            tool_call_details = f"[bold cyan]Tool Name:[/bold cyan] {name}\n[bold cyan]Arguments:[/bold cyan] {json.dumps(args, indent=2)}"
+            
+            is_truncated = len(output) > 300
+            if current_turn.is_full:
+                display_output = output
+                subtitle = "Press [bold cyan]Ctrl+O[/bold cyan] to collapse output"
+            else:
+                display_output = output[:300]
+                if is_truncated:
+                    display_output += "\n\n[dim]... [Output truncated. Press Ctrl+O in prompt to expand] [/dim]"
+                subtitle = "Press [bold cyan]Ctrl+O[/bold cyan] to expand output" if is_truncated else ""
+                
+            box_content = f"{tool_call_details}\n\n[bold green]Output:[/bold green]\n{display_output}"
+            console.print(Panel(box_content, title="MCP Tool Execution", subtitle=subtitle, border_style="cyan"))
+            
+        # 3. Print assistant response
+        if current_turn.assistant_response:
+            console.print("\n[bold magenta]Assistant:[/bold magenta]")
+            console.print(Markdown(current_turn.assistant_response))
+            console.print()
+            
+    return capture.get()
+
+def custom_input(prompt_text, console, session):
+    import sys
+    sys.stdout.write(prompt_text)
+    sys.stdout.flush()
+    
+    buffer = []
+    
+    if sys.platform == "win32":
+        import msvcrt
+        def get_char():
+            ch = msvcrt.getch()
+            if ch in (b'\x00', b'\xe0'):
+                msvcrt.getch()
+                return None
+            return ch
+    else:
+        import tty, termios
+        def get_char():
+            fd = sys.stdin.fileno()
+            old_settings = termios.tcgetattr(fd)
+            try:
+                tty.setraw(fd)
+                ch = sys.stdin.read(1)
+            finally:
+                termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
+            return ch.encode('utf-8')
+            
+    while True:
+        ch = get_char()
+        if ch is None:
+            continue
+            
+        if ch == b'\x03': # Ctrl+C
+            raise KeyboardInterrupt()
+            
+        if ch in (b'\r', b'\n'):
+            sys.stdout.write("\n")
+            sys.stdout.flush()
+            break
+            
+        if ch in (b'\x08', b'\x7f'): # Backspace
+            if buffer:
+                buffer.pop()
+                sys.stdout.write("\b \b")
+                sys.stdout.flush()
+            continue
+            
+        if ch == b'\x0f': # Ctrl+O
+            import time
+            # Clear line
+            line_len = len(prompt_text) + len(buffer)
+            sys.stdout.write("\r" + " " * line_len + "\r")
+            sys.stdout.flush()
+            
+            if not session or not session.current_turn or not session.current_turn.tool_calls:
+                console.print("[yellow]No tool outputs recorded in this turn to toggle.[/yellow]")
+                time.sleep(1)
+                sys.stdout.write("\033[F\033[K")
+                sys.stdout.flush()
+                # Redraw
+                sys.stdout.write(prompt_text + "".join(buffer))
+                sys.stdout.flush()
+                continue
+                
+            # Get height of the current rendered turn block
+            rendered_text_before = render_turn_content(console, session.current_turn)
+            lines_before = len(rendered_text_before.splitlines())
+            
+            # Clear the old turn block from the screen (move up lines_before times, and clear them)
+            sys.stdout.write("\033[A\033[2K" * lines_before)
+            sys.stdout.flush()
+            
+            # Toggle the full/truncated state
+            session.current_turn.is_full = not session.current_turn.is_full
+            
+            # Render the updated turn block
+            rendered_text_after = render_turn_content(console, session.current_turn)
+            
+            # Print the updated turn block
+            sys.stdout.write(rendered_text_after)
+            sys.stdout.flush()
+            
+            # Redraw prompt and buffer
+            sys.stdout.write(prompt_text + "".join(buffer))
+            sys.stdout.flush()
+            continue
+            
+        try:
+            char_str = ch.decode('utf-8')
+            if ord(char_str) >= 32 or char_str == '\n':
+                buffer.append(char_str)
+                sys.stdout.write(char_str)
+                sys.stdout.flush()
+        except Exception:
+            pass
+            
+    return "".join(buffer)
+
 async def chat_async(mode=None, ssh_host=None, ssh_user="root"):
     config = load_config()
     
@@ -162,12 +303,25 @@ async def chat_async(mode=None, ssh_host=None, ssh_user="root"):
     
     while True:
         try:
-            user_input = click.prompt("User")
+            console.print("─" * console.width, style="dim blue")
+            user_input = custom_input("User (Press Ctrl+O for logs): ", console, session)
+            
             if user_input.strip().lower() in ["exit", "quit"]:
+                console.print("─" * console.width, style="dim blue")
                 break
                 
             if not user_input.strip():
+                # Clean up prompt line and top line to avoid visual trailing lines
+                import sys
+                sys.stdout.write("\033[A\033[2K\033[A\033[2K")
+                sys.stdout.flush()
                 continue
+                
+            console.print("─" * console.width, style="dim blue")
+            
+            from client import CurrentTurn
+            session.current_turn = CurrentTurn()
+            session.current_turn.user_question = user_input
                 
             console.print("\n[bold magenta]CandelaAI is thinking... (Press ESC to interrupt)[/bold magenta]")
             
@@ -192,6 +346,7 @@ async def chat_async(mode=None, ssh_host=None, ssh_user="root"):
                 
             if send_task.done() and not send_task.cancelled():
                 response = send_task.result()
+                session.current_turn.assistant_response = response
                 console.print("\n[bold magenta]Assistant:[/bold magenta]")
                 console.print(Markdown(response))
                 console.print()

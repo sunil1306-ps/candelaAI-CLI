@@ -45,10 +45,10 @@ class McpManager:
             local_mcp_dir = str(Path(__file__).parent / "lanforge_mcp").replace("\\", "/")
             remote_paths = config.get("remote_paths", {
                 local_mcp_dir + "/lanforge-scripts": "/home/lanforge/lanforge-scripts",
-                local_mcp_dir: "/home/lanforge/Desktop/sunil/candela_cli/lanforge",
+                local_mcp_dir: "/home/lanforge/Desktop/sunil/candelaAI-CLI/lanforge_mcp",
                 "C:/Users/Sunil.S/Desktop/Test Data/lanforge/lanforge-scripts": "/home/lanforge/lanforge-scripts",
-                "C:/Users/Sunil.S/Desktop/Test Data/lanforge": "/home/lanforge/Desktop/sunil/candela_cli/lanforge",
-                "C:\\Users\\Sunil.S\\Desktop\\Test Data\\lanforge": "/home/lanforge/Desktop/sunil/candela_cli/lanforge",
+                "C:/Users/Sunil.S/Desktop/Test Data/lanforge": "/home/lanforge/Desktop/sunil/candelaAI-CLI/lanforge_mcp",
+                "C:\\Users\\Sunil.S\\Desktop\\Test Data\\lanforge": "/home/lanforge/Desktop/sunil/candelaAI-CLI/lanforge_mcp",
             })
             
             # Translate all args from Windows local paths to remote Linux paths
