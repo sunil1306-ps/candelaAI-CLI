@@ -20,7 +20,7 @@ An agentic AI CLI for LANforge network test automation. Supports Google Gemini a
 ```bash
 # Option A: clone from your repo
 git clone https://github.com/sunil1306-ps/candelaAI-CLI.git
-cd candelaAI
+cd candelaAI-CLI
 
 # Option B: copy the folder to the new machine
 ```
